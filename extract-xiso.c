@@ -23,7 +23,6 @@
 	This code is copyright in@fishtank.com and is licensed under a slightly modified
 	version of the Berkeley Software License, which follows:
 
-	/*
 	 * Copyright (c) 2003 in <in@fishtank.com>
 	 * All rights reserved.
 	 *
@@ -57,7 +56,6 @@
 	 * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 	 * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 	 * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-	 *\
 	
 	
 	Last modified:
@@ -359,11 +357,12 @@
 #endif
 
 
-#define DEBUG_VERIFY_XISO				0
-#define DEBUG_OPTIMIZE_XISO				0
-#define DEBUG_TRAVERSE_XISO_DIR			0
+#define DEBUG_VERIFY_XISO				1
+#define DEBUG_OPTIMIZE_XISO				1
+#define DEBUG_TRAVERSE_XISO_DIR			1
 
 
+#define DEBUG 1
 #ifndef DEBUG
 	#define DEBUG						0
 #endif
@@ -589,7 +588,7 @@ dir_node_avl *avl_fetch( dir_node_avl *in_root, char *in_filename );
 avl_result avl_insert( dir_node_avl **in_root, dir_node_avl *in_node );
 int avl_traverse_depth_first( dir_node_avl *in_root, traversal_callback in_callback, void *in_context, avl_traversal_method in_method, long in_depth );
 
-void boyer_moore_done();
+void boyer_moore_done(void);
 char *boyer_moore_search( char *in_text, long in_text_len );
 int boyer_moore_init( char *in_pattern, long in_pat_len, long in_alphabet_size );
 
@@ -647,8 +646,8 @@ int main( int argc, char **argv ) {
 	struct stat		sb;
 	create_list	   *create = nil, *p, *q, **r;
 	int				i, fd, opt_char, err = 0, isos = 0;
-	bool			extract = true, rewrite = false, free_user = false, free_pass = false, x_seen = false, delete = false, optimized;
-	char		   *cwd = nil, *path = nil, *buf = nil, *new_iso_path = nil, tag[ XISO_OPTIMIZED_TAG_LENGTH * sizeof(long) ];
+	bool			extract = true, rewrite = false, x_seen = false, delete = false, optimized;
+	char		   *path = nil, *buf = nil, *new_iso_path = nil, tag[ XISO_OPTIMIZED_TAG_LENGTH * sizeof(long) ];
 
 	if ( argc < 2 ) { usage(); exit( 1 ); }
 	
@@ -759,7 +758,7 @@ int main( int argc, char **argv ) {
 			char			*tmp = nil;
 
 			if ( p->name ) {
-				for ( i = (int) strlen( p->name ); i >= 0 && p->name[ i ] != PATH_CHAR; --i ) ; ++i;
+				for ( i = (int) strlen( p->name ); i >= 0 && p->name[ i ] != PATH_CHAR; --i ) { } ++i;
 
 				if ( i ) {
 					if ( ( tmp = (char *) malloc( i + 1 ) ) == nil ) mem_err();
@@ -956,7 +955,7 @@ int create_xiso( char *in_root_directory, char *in_output_directory, dir_node_av
 			if ( chdir( in_root_directory ) == -1 ) chdir_err( in_root_directory );
 			if ( ! err ) {
 				if ( in_root_directory[ i = (int) strlen( in_root_directory ) - 1 ] == '/' || in_root_directory[ i ] == '\\' ) in_root_directory[ i-- ] = 0;
-				for ( iso_dir = &in_root_directory[ i ]; iso_dir >= in_root_directory && *iso_dir != PATH_CHAR; --iso_dir ) ; ++iso_dir;
+				for ( iso_dir = &in_root_directory[ i ]; iso_dir >= in_root_directory && *iso_dir != PATH_CHAR; --iso_dir ) { } ++iso_dir;
 
 				iso_name = in_name ? in_name : iso_dir;
 			}
@@ -1062,8 +1061,16 @@ int create_xiso( char *in_root_directory, char *in_output_directory, dir_node_av
 		err = avl_traverse_depth_first( &root, (traversal_callback) write_tree, &wt_context, k_prefix, 0 );
 	}
 
-	if ( ! err && ( pos = lseek( xiso, (xoff_t) 0, SEEK_END ) ) == -1 ) seek_err();
-	if ( ! err && write( xiso, buf, i = (int) (( XISO_FILE_MODULUS - pos % XISO_FILE_MODULUS ) % XISO_FILE_MODULUS) ) != i ) write_err();
+	if ( err ) {
+		return err;
+	}
+	pos = lseek( xiso, (xoff_t) 0, SEEK_END );
+	if ( pos == -1 ) {
+		seek_err();
+		return err;
+	}
+	i = (int) (( XISO_FILE_MODULUS - pos % XISO_FILE_MODULUS ) % XISO_FILE_MODULUS);
+	if ( ! err && write( xiso, buf, i) != i ) write_err();
 
 	if ( ! err ) err = write_volume_descriptors( xiso, ( pos + (xoff_t) i ) / XISO_SECTOR_SIZE );
 
@@ -1100,7 +1107,7 @@ int decode_xiso( char *in_xiso, char *in_path, modes in_mode, char **out_iso_pat
 	bool					repair = false;
 	int32_t					root_dir_sect, root_dir_size;
 	int						xiso, err = 0, len, path_len = 0, add_slash = 0;
-	char				   *buf, *cwd = nil, *name = nil, *short_name = nil, *iso_name, *folder = nil;
+	char				   *buf, *cwd = nil, *name = nil, *short_name = nil, *iso_name;
 
 	if ( ( xiso = open( in_xiso, READFLAGS, 0 ) ) == -1 ) open_err( in_xiso );
 	
@@ -1112,7 +1119,7 @@ int decode_xiso( char *in_xiso, char *in_path, modes in_mode, char **out_iso_pat
 			repair = true;
 		}
 	
-		for ( name = &in_xiso[ len ]; name >= in_xiso && *name != PATH_CHAR; --name ) ; ++name;
+		for ( name = &in_xiso[ len ]; name >= in_xiso && *name != PATH_CHAR; --name ) { } ++name;
 
 		len = (int) strlen( name );
 
@@ -1128,7 +1135,7 @@ int decode_xiso( char *in_xiso, char *in_path, modes in_mode, char **out_iso_pat
 
 	if ( ! err && in_mode == k_extract && in_path ) {
 		if ( ( cwd = getcwd( nil, 0 ) ) == nil ) mem_err();
-		if ( ! err && mkdir( in_path, 0755 ) );
+		if ( ! err && mkdir( in_path, 0755 ) ) { }
 		if ( ! err && chdir( in_path ) == -1 ) chdir_err( in_path );
 	}
 
@@ -1605,7 +1612,7 @@ int boyer_moore_init( char *in_pattern, long in_pat_len, long in_alphabet_size )
 }
 
 
-void boyer_moore_done() {
+void boyer_moore_done(void) {
 	if ( s_bc_table ) { free( s_bc_table ); s_bc_table = nil; }
 	if ( s_gs_table ) { free( s_gs_table ); s_gs_table = nil; }
 }
@@ -1637,7 +1644,6 @@ char *boyer_moore_search( char *in_text, long in_text_len ) {
 
 int extract_file( int in_xiso, dir_node *in_file, modes in_mode , char* path) {
 	int						err = 0;
-	bool					warn = false;
 	uint32_t				i, size, read_size, totalsize = 0, totalpercent = 0;
 	int						out;
 
@@ -1730,7 +1736,7 @@ int write_tree( dir_node_avl *in_avl, write_tree_context *in_context, int in_dep
 				if ( ! err ) err = avl_traverse_depth_first( in_avl->subdirectory, (traversal_callback) write_tree, &context, k_prefix, 0 );
 
 				if (!err && lseek(in_context->xiso, (xoff_t)in_avl->start_sector * XISO_SECTOR_SIZE, SEEK_SET) == -1) seek_err();
-				if (!err) err = avl_traverse_depth_first(in_avl->subdirectory, (traversal_callback)write_directory, (void*)in_context->xiso, k_prefix, 0);
+				if (!err) err = avl_traverse_depth_first(in_avl->subdirectory, (traversal_callback)write_directory, (void *) (intptr_t) in_context->xiso, k_prefix, 0);
 				if (!err && (pos = lseek(in_context->xiso, 0, SEEK_CUR)) == -1) seek_err();
 				if (!err && (pad = (int)((XISO_SECTOR_SIZE - (pos % XISO_SECTOR_SIZE)) % XISO_SECTOR_SIZE))) {
 					memset(sector, XISO_PAD_BYTE, pad);
